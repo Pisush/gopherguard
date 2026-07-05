@@ -12,8 +12,8 @@ fail=0
 # Never allow a real .env (only .env.example is permitted).
 while IFS= read -r f; do
   case "$f" in
-    .env.example) : ;;
-    .env|.env.*) echo "pre-commit: refusing to commit '$f' (only .env.example is allowed)." >&2; fail=1 ;;
+    .env.example|*/.env.example) : ;;
+    .env|.env.*|*/.env|*/.env.*) echo "pre-commit: refusing to commit '$f' (only .env.example is allowed)." >&2; fail=1 ;;
   esac
 done <<< "$staged"
 
