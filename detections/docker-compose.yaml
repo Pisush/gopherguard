@@ -1,0 +1,78 @@
+# Local trace-store stack for gopherguard's "SIEM for agent traces" detections.
+#
+# Bring up with:
+#   docker compose -f detections/docker-compose.yaml up
+#
+# Then point the app at the collector:
+#   export OTEL_EXPORTER=otlp
+#   export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+#
+# See detections/README.md for the full data-flow diagram.
+
+version: "3.9"
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0 # VERIFY: confirm latest stable tag at deploy time
+    container_name: gopherguard-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC (app -> collector)
+      - "4318:4318" # OTLP HTTP (app -> collector)
+    depends_on:
+      - tempo
+      - clickhouse
+
+  tempo:
+    image: grafana/tempo:2.6.1 # VERIFY: confirm latest stable tag at deploy time
+    container_name: gopherguard-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # Tempo query API/UI (used by Grafana datasource)
+      - "4317" # internal OTLP gRPC ingest (from collector's otlp/tempo exporter)
+      - "4318" # internal OTLP HTTP ingest
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.9 # VERIFY: confirm latest stable tag at deploy time
+    container_name: gopherguard-clickhouse
+    environment:
+      CLICKHOUSE_DB: otel
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "" # placeholder -- set a real secret outside local dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123" # HTTP interface (SQL over HTTP, used by Grafana datasource)
+      - "9000:9000" # native TCP interface (used by the collector's clickhouse exporter)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  grafana:
+    image: grafana/grafana:11.3.0 # VERIFY: confirm latest stable tag at deploy time
+    container_name: gopherguard-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true" # local dev only -- do not use anonymous auth in production
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_INSTALL_PLUGINS: "" # placeholder -- add plugin IDs here if needed
+    ports:
+      - "3000:3000" # Grafana UI
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - tempo
+      - clickhouse
+
+volumes:
+  tempo-data: {}
+  clickhouse-data: {}
+  grafana-data: {}

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: build run run-vuln test eval trace-up deploy tidy fmt vet ollama-setup hooks help
+.PHONY: build run run-vuln test eval trace-up trace-down detect deploy tidy fmt vet ollama-setup hooks help
 
 build: ## Build hardened and vulnerable binaries into ./bin
 	go build -o bin/gopherguard ./cmd/gopherguard
@@ -19,9 +19,14 @@ eval: ## Run the eval suite (gates CI/CD)
 	@echo "eval suite: implemented in M4"
 	@exit 0
 
-trace-up: ## Start local trace stack (Grafana/Tempo)
-	@echo "trace stack (Grafana/Tempo): implemented in M3"
-	@exit 0
+trace-up: ## Start the local trace stack (OTel Collector + Tempo + ClickHouse + Grafana)
+	docker compose -f detections/docker-compose.yaml up -d
+
+trace-down: ## Stop the local trace stack
+	docker compose -f detections/docker-compose.yaml down
+
+detect: ## Run the trace-query detection demo over the OWASP pairs (fenced)
+	go run ./cmd/gopherguard-vuln --i-understand-this-is-insecure --detect
 
 deploy: ## Run the deploy pipeline (hardened only, never vuln mode)
 	@echo "deploy pipeline: implemented in M4"

@@ -12,8 +12,8 @@ Milestones, tracked M0 → M5:
 
 - [x] **M0** — Scaffold (module, docs, dev environment, Gemma-local one-tool agent)
 - [x] **M1** — Hardened baseline: code-routed Coordinator/Researcher/DB/Writer graph, trust-boundary OTel, HITL on mutating tools, least-privilege scoping, Gemma tool-bridge
-- [ ] **M2** — Vulnerable/hardened OWASP Agentic Top 10 pairs
-- [ ] **M3** — Trust-boundary telemetry + trace-query detections
+- [x] **M2** — Vulnerable/hardened OWASP Agentic (ASI) pairs (8 pairs, fenced, all actions simulated)
+- [x] **M3** — Trace-query detections: 5 seed rules that fire on the vulnerable pair traces and stay quiet on the hardened ones; Tempo/ClickHouse queries + Grafana dashboards
 - [ ] **M4** — Eval-gated CI/CD to Cloud Run
 - [ ] **M5** — Polyglot A2A (Python analysis agent)
 

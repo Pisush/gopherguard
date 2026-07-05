@@ -1,0 +1,50 @@
+# Grafana datasource provisioning for the gopherguard trace-store stack.
+# Mounted read-only at /etc/grafana/provisioning/datasources in the compose
+# stack (detections/docker-compose.yaml). Placeholders only -- no secrets.
+
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    uid: DS_TEMPO
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: DS_CLICKHOUSE
+      serviceMap:
+        datasourceUid: DS_PROMETHEUS
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: ""
+
+  - name: ClickHouse
+    uid: DS_CLICKHOUSE
+    type: grafana-clickhouse-datasource
+    access: proxy
+    url: http://clickhouse:8123
+    jsonData:
+      host: clickhouse
+      port: 9000
+      protocol: native
+      defaultDatabase: otel
+      username: default
+      secure: false
+      tlsSkipVerify: true
+    secureJsonData:
+      password: "" # placeholder -- inject via secret manager / env override in real deploys
+
+  - name: Prometheus
+    uid: DS_PROMETHEUS
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090 # placeholder -- point at your metrics backend for the SLO dashboard
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: "15s"

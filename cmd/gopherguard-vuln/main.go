@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Pisush/gopherguard/internal/detect"
 	"github.com/Pisush/gopherguard/internal/owasp"
 )
 
@@ -40,6 +41,7 @@ func main() {
 		"acknowledge that vulnerable mode is intentionally insecure and localhost-only")
 	list := flag.Bool("list", false, "list the OWASP ASI vulnerable/hardened pairs and exit")
 	pairID := flag.String("pair", "", "run only the vulnerable variant of this pair ID (e.g. ASI01)")
+	detectMode := flag.Bool("detect", false, "run the trace-query detection demo: which rules fire on vulnerable vs hardened traces")
 	flag.Parse()
 
 	registry := owasp.DefaultRegistry()
@@ -82,12 +84,48 @@ func main() {
 		pairs = []owasp.Pair{p}
 	}
 
+	if *detectMode {
+		runDetectionDemo(ctx, pairs)
+		return
+	}
+
 	fmt.Printf("\nrunning %d vulnerable-variant demonstration(s) (all actions simulated):\n\n", len(pairs))
 	for _, p := range pairs {
 		owasp.ReportVulnerable(os.Stdout, p, p.Vulnerable(ctx))
 		fmt.Println()
 	}
 	fmt.Println("fence active: 127.0.0.1 only, local Gemma, no egress. See docs/owasp-mapping.md.")
+}
+
+// runDetectionDemo captures each pair's vulnerable and hardened traces and
+// reports which trace-query detection rules fire on each — the "SIEM for agent
+// traces" demo. Rules should fire on the vulnerable trace and stay quiet on the
+// hardened one.
+func runDetectionDemo(ctx context.Context, pairs []owasp.Pair) {
+	fmt.Printf("\ntrace-query detection demo over %d pair(s):\n", len(pairs))
+	fmt.Println("(rules should FIRE on the vulnerable trace and be quiet on the hardened one)")
+
+	for _, p := range pairs {
+		vulnTrace := detect.Capture(func(ctx context.Context) { p.Vulnerable(ctx) })
+		hardTrace := detect.Capture(func(ctx context.Context) { p.Hardened(ctx) })
+
+		fmt.Printf("\n[%s] %s\n", p.ID, p.Risk)
+		for _, rr := range detect.EvaluateAll(vulnTrace) {
+			hardFired := ruleFired(rr.Rule, hardTrace)
+			if rr.Finding.Fired || hardFired {
+				fmt.Printf("  %-10s vuln=%-5t hardened=%-5t  %s\n",
+					rr.Rule.ID, rr.Finding.Fired, hardFired, rr.Rule.Title)
+				if rr.Finding.Fired {
+					fmt.Printf("             evidence: %s\n", rr.Finding.Evidence)
+				}
+			}
+		}
+	}
+	fmt.Println("\nfence active: 127.0.0.1 only, local Gemma, no egress. See detections/.")
+}
+
+func ruleFired(r detect.Rule, t detect.Trace) bool {
+	return r.Detect(t).Fired
 }
 
 func mustSet(key, value string) {
