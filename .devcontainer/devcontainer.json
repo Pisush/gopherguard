@@ -1,0 +1,27 @@
+{
+  "name": "gopherguard",
+  "//": "Go 1.25+ is required (see go.mod toolchain go1.25.11). The 'go:1' tag tracks the latest Go 1.x; pin to a specific digest if reproducibility across time is needed.",
+  "image": "mcr.microsoft.com/devcontainers/go:1",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "//": "Needed later for the local OTel collector / Grafana-Tempo trace stack (M3)."
+    }
+  },
+  "forwardPorts": [8080, 11434, 3000, 4317, 4318],
+  "portsAttributes": {
+    "8080": { "label": "gopherguard app" },
+    "11434": { "label": "Ollama" },
+    "3000": { "label": "Grafana" },
+    "4317": { "label": "OTel collector (gRPC)" },
+    "4318": { "label": "OTel collector (HTTP)" }
+  },
+  "postCreateCommand": "go mod download",
+  "//postCreate": "Ollama itself is not installed by this devcontainer. Install it (https://ollama.com/download) and run 'ollama pull gemma2:2b' to use the default local-Gemma model layer inside the container or on the host.",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  }
+}

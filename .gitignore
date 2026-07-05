@@ -1,0 +1,42 @@
+# Compiled binaries
+gopherguard
+gopherguard-vuln
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build / test artifacts
+*.test
+*.out
+/dist/
+/bin/
+
+# Coverage
+*.cover
+coverage.txt
+coverage.html
+coverage.out
+
+# Environment / secrets — never commit real values
+.env
+.env.local
+.env.*.local
+
+# Go workspace files (local-only, not part of module config)
+go.work
+go.work.sum
+
+# Local OTel / trace data dumps
+/tmp-traces/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo

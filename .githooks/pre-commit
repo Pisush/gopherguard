@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# gopherguard pre-commit secret scan (guardrail §0.3).
+# Blocks commits that appear to contain real secrets. Heuristic, not a vault —
+# defense in depth alongside .gitignore and runtime env injection.
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+fail=0
+
+# Never allow a real .env (only .env.example is permitted).
+while IFS= read -r f; do
+  case "$f" in
+    .env.example) : ;;
+    .env|.env.*) echo "pre-commit: refusing to commit '$f' (only .env.example is allowed)." >&2; fail=1 ;;
+  esac
+done <<< "$staged"
+
+# Secret-shaped content. Patterns are passed with -e so leading dashes are safe.
+patterns=(
+  'AIza[0-9A-Za-z_-]{35}'                 # Google API key
+  'gh[posru]_[0-9A-Za-z]{36,}'            # GitHub token
+  '-----BEGIN [A-Z ]*PRIVATE KEY-----'    # private key block
+  'sk-[A-Za-z0-9]{20,}'                   # generic secret key
+)
+while IFS= read -r f; do
+  case "$f" in
+    .env.example|.githooks/pre-commit) continue ;;
+  esac
+  [ -f "$f" ] || continue
+  for p in "${patterns[@]}"; do
+    if git show ":$f" | grep -nE -e "$p" >/dev/null 2>&1; then
+      echo "pre-commit: possible secret matching /$p/ in '$f' — remove it or use env injection." >&2
+      fail=1
+    fi
+  done
+done <<< "$staged"
+
+exit $fail
