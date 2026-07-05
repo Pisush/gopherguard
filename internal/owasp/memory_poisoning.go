@@ -63,7 +63,12 @@ func memoryPoisoningVulnerable(ctx context.Context) Outcome {
 	decideCtx, end := step(writeCtx, "memory.decide",
 		telemetry.AttrPrivilegeScope("write:order"))
 	entry, _ := store.Read(memPoisonKey)
-	telemetry.Stamp(decideCtx, telemetry.AttrMemProvenance(entry.Provenance))
+	// The value is untrusted (tool-derived), but this vulnerable path acts on it
+	// anyway. Stamp untrusted so the trace makes the "acted on untrusted memory"
+	// signal explicit for M3.
+	telemetry.Stamp(decideCtx,
+		telemetry.AttrMemProvenance(entry.Provenance),
+		telemetry.AttrUntrusted(!entry.IsTrusted()))
 	acted := entry.Value == memPoisonUntrustedContent // acted on poisoned memory, unchecked
 	end()
 

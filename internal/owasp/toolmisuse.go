@@ -17,8 +17,7 @@ import (
 // Everything is simulated: no file is read, no command runs. The "sensitive"
 // path is an obvious placeholder.
 const (
-	toolMisuseAllowedPrefix = "/workspace/" // arguments must stay under here
-	toolMisuseSafeArg       = "/workspace/notes.txt"
+	toolMisuseAllowedPrefix = "/workspace/"                          // arguments must stay under here
 	toolMisuseDangerousArg  = "/workspace/../etc/placeholder-secret" // escapes the boundary
 )
 
