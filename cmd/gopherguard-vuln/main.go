@@ -13,9 +13,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/Pisush/gopherguard/internal/owasp"
 )
 
 const insecureFlag = "i-understand-this-is-insecure"
@@ -35,26 +38,56 @@ const banner = `
 func main() {
 	understand := flag.Bool(insecureFlag, false,
 		"acknowledge that vulnerable mode is intentionally insecure and localhost-only")
+	list := flag.Bool("list", false, "list the OWASP ASI vulnerable/hardened pairs and exit")
+	pairID := flag.String("pair", "", "run only the vulnerable variant of this pair ID (e.g. ASI01)")
 	flag.Parse()
+
+	registry := owasp.DefaultRegistry()
+
+	if *list {
+		fmt.Println("gopherguard OWASP ASI pairs:")
+		for _, p := range registry.All() {
+			fmt.Printf("  %-12s %s\n", p.ID, p.Risk)
+		}
+		return
+	}
 
 	if !*understand {
 		fmt.Fprintf(os.Stderr,
 			"refusing to start: vulnerable mode is fenced.\n"+
-				"re-run with --%s to acknowledge it is intentionally insecure and localhost-only.\n",
+				"re-run with --%s to acknowledge it is intentionally insecure and localhost-only.\n"+
+				"(use --list to see the pairs without running anything.)\n",
 			insecureFlag)
 		os.Exit(1)
 	}
 
-	// Force the fence into the environment before any agent/model wiring so
-	// downstream code (M2 variants) inherits localhost-only, keyless, local Gemma.
+	// Force the fence into the environment before running any variant so the
+	// process stays localhost-only, keyless, and local-Gemma. The pairs perform
+	// only simulated actions, but the fence is defense in depth.
 	mustSet("GG_MODEL_MODE", "gemma")
 	mustSet("GG_BIND_ADDR", "127.0.0.1")
 	mustSet("GG_VULN_MODE", "1")
-	os.Unsetenv("GOOGLE_API_KEY") // belt-and-suspenders: no egress even if set
+	os.Unsetenv("GOOGLE_API_KEY")
 
 	fmt.Print(banner)
-	fmt.Println("vulnerable-mode variants are implemented in M2 (see docs/owasp-mapping.md).")
-	fmt.Println("fence active: 127.0.0.1 only, local Gemma, no egress.")
+
+	ctx := context.Background()
+	pairs := registry.All()
+	if *pairID != "" {
+		p, ok := registry.Get(*pairID)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown pair %q (use --list)\n", *pairID)
+			os.Exit(1)
+		}
+		pairs = []owasp.Pair{p}
+	}
+
+	fmt.Printf("\nrunning %d vulnerable-variant demonstration(s) (all actions simulated):\n\n", len(pairs))
+	for _, p := range pairs {
+		owasp.ReportVulnerable(os.Stdout, p, p.Vulnerable(ctx))
+		fmt.Println()
+	}
+	fmt.Println("fence active: 127.0.0.1 only, local Gemma, no egress. See docs/owasp-mapping.md.")
 }
 
 func mustSet(key, value string) {
