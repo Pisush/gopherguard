@@ -44,7 +44,7 @@ func NewWebSearch() (ScopedTool, error) {
 			return WebSearchResult{}, fmt.Errorf("web_search: query must not be empty")
 		}
 		return WebSearchResult{
-			Query: q,
+			Query:  q,
 			Source: "offline-fixture",
 			Results: []string{
 				fmt.Sprintf("Overview: results for %q (offline fixture; production mode performs a real, egress-marked search).", q),

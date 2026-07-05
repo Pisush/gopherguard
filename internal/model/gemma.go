@@ -102,12 +102,13 @@ func (g *Gemma) GenerateContent(ctx context.Context, req *adkmodel.LLMRequest, _
 		// prompt and remember which names are callable so we can parse the
 		// reply back into a FunctionCall (local Gemma has no native tools).
 		//
-		// One-shot: only offer tools when no tool has run yet this turn. Once a
-		// FunctionResponse is in the history, suppress tool-offering so the
-		// model must produce a final text answer. This bounds a weak local
-		// model to a single tool round-trip instead of looping on the tool.
+		// One-shot per turn: only offer tools when no tool has run yet in the
+		// current user turn. Once a tool has produced a result this turn,
+		// suppress tool-offering so the model must produce a final text answer.
+		// This bounds a weak local model to a single tool round-trip per turn
+		// instead of looping, without disabling tools for later turns.
 		var allowed map[string]bool
-		if !hasFunctionResponse(req.Contents) {
+		if !toolRanThisTurn(req.Contents) {
 			decls := declarations(req.Config)
 			if len(decls) > 0 {
 				allowed = make(map[string]bool, len(decls))

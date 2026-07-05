@@ -17,24 +17,26 @@ ADK Go 2.0 gives you an actual graph: nodes (`workflow.NewFunctionNode`, `workfl
 The detail that matters most in gopherguard's design: **routing decisions are made by Go code, not by an LLM call.** The coordinator is a `FunctionNode`, not an `AgentNode` — it runs plain Go, inspects the incoming request, and emits a route as data. Edges declared with `StringRoute("x")` fire when `"x"` shows up in the event's `Routes` slice. No token spend, no latency, no probabilistic drift, and — critically — a routing decision you can log, replay, and unit-test like any other branch in your codebase.
 
 ```go
-func routeRequest(ctx context.Context, in *session.Event) (*session.Event, error) {
-    switch {
-    case looksLikeDBQuery(in.Text):
-        return &session.Event{Routes: []string{"dbagent"}}, nil
-    case looksLikeResearchQuery(in.Text):
-        return &session.Event{Routes: []string{"researcher"}}, nil
-    default:
-        return &session.Event{Routes: []string{"writer"}}, nil
-    }
-}
+// The coordinator is a plain FunctionNode: input is the user's text, and it
+// returns an event whose Routes select the successor. NewFunctionNode infers
+// IN=string / OUT=*session.Event.
+coordinator := workflow.NewFunctionNode("coordinator",
+    func(ctx agent.Context, input string) (*session.Event, error) {
+        route := classify(input) // deterministic Go switch on the request
+        ev := session.NewEvent(ctx, ctx.InvocationID())
+        ev.Routes = []string{route}   // e.g. "dbagent" / "researcher" / "writer"
+        ev.Output = input             // pass the user's text to the chosen agent
+        return ev, nil
+    }, workflow.NodeConfig{})
 
-edges := workflow.NewEdgeBuilder().
-    Add(workflow.Start, coordinator).
-    AddRoutes(coordinator, map[string]workflow.Node{
-        "dbagent":    dbAgentNode,
-        "researcher": researcherNode,
-        "writer":     writerNode,
-    })
+eb := workflow.NewEdgeBuilder()
+eb.Add(workflow.Start, coordinator)
+eb.AddRoutes(coordinator, map[string]workflow.Node{
+    "dbagent":    dbAgentNode,
+    "researcher": researcherNode,
+    "writer":     writerNode,
+})
+edges := eb.Build() // workflowagent.Config.Edges wants []Edge
 ```
 
 Compare that to an LLM-routed design, where the same decision costs a model call, adds nondeterministic latency, and leaves you writing prompt-engineering incantations to keep the router from occasionally sending a database write query to the summarizer. Code-routed edges aren't a performance optimization bolted on afterward — they're a correctness and auditability decision made up front. When something in production routes to the wrong agent, you want a stack trace, not a hypothesis about what the model was "thinking."

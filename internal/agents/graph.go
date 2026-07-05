@@ -56,12 +56,9 @@ func BuildGraph(ctx context.Context) (agent.Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	researchTools, err := security.NewPolicy("researcher", "read:web").Authorize(web)
-	if err != nil {
-		return nil, err
-	}
 	researcher, err := newScopedAgent("researcher",
-		"gathers information with web_search and summarizes it", researcherInstruction, m, researchTools)
+		"gathers information with web_search and summarizes it", researcherInstruction, m,
+		security.NewPolicy("researcher", "read:web"), web)
 	if err != nil {
 		return nil, err
 	}
@@ -75,19 +72,17 @@ func BuildGraph(ctx context.Context) (agent.Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbTools, err := security.NewPolicy("dbagent", "read:db", "write:db").Authorize(dbQuery, dbWrite)
-	if err != nil {
-		return nil, err
-	}
 	dbagent, err := newScopedAgent("dbagent",
-		"reads and (with confirmation) writes database records", dbagentInstruction, m, dbTools)
+		"reads and (with confirmation) writes database records", dbagentInstruction, m,
+		security.NewPolicy("dbagent", "read:db", "write:db"), dbQuery, dbWrite)
 	if err != nil {
 		return nil, err
 	}
 
 	// writer — no tools, no privileges.
 	writer, err := newScopedAgent("writer",
-		"composes a prose response", writerInstruction, m, nil)
+		"composes a prose response", writerInstruction, m,
+		security.NewPolicy("writer"))
 	if err != nil {
 		return nil, err
 	}
@@ -128,16 +123,21 @@ func BuildGraph(ctx context.Context) (agent.Agent, error) {
 	})
 }
 
-// newScopedAgent builds an llmagent from authorized (least-privilege) tools and
-// installs a BeforeToolCallback that stamps trust-boundary attributes for every
-// tool call.
-func newScopedAgent(name, description, instruction string, m adkmodel.LLM, scoped []tools.ScopedTool) (agent.Agent, error) {
+// newScopedAgent builds an llmagent whose tools are first authorized against
+// the agent's least-privilege policy (so the guard cannot be skipped at the
+// call site), then installs a BeforeToolCallback that stamps trust-boundary
+// attributes for every tool call.
+func newScopedAgent(name, description, instruction string, m adkmodel.LLM, policy security.Policy, scoped ...tools.ScopedTool) (agent.Agent, error) {
+	authorized, err := policy.Authorize(scoped...)
+	if err != nil {
+		return nil, err
+	}
 	registry := tools.NewRegistry()
-	if err := registry.Register(scoped...); err != nil {
+	if err := registry.Register(authorized...); err != nil {
 		return nil, fmt.Errorf("register %s tools: %w", name, err)
 	}
-	byName := make(map[string]tools.ScopedTool, len(scoped))
-	for _, st := range scoped {
+	byName := make(map[string]tools.ScopedTool, len(authorized))
+	for _, st := range authorized {
 		byName[st.Name()] = st
 	}
 
@@ -178,7 +178,8 @@ func trustAttrs(st tools.ScopedTool) []attribute.KeyValue {
 }
 
 // isEgress reports whether a privilege scope implies an outbound network call.
-func isEgress(scope string) bool { return strings.HasPrefix(scope, "read:web") }
+// Exact match, so a future scope like "read:webhook" is not misread as egress.
+func isEgress(scope string) bool { return scope == "read:web" }
 
 // newCoordinatorNode builds the deterministic, code-routed coordinator. It
 // classifies the user's request with a plain Go switch, stamps
@@ -191,7 +192,6 @@ func newCoordinatorNode() *workflow.FunctionNode {
 			telemetry.Stamp(ctx, telemetry.AttrModelRouteReason("code:"+route))
 
 			ev := session.NewEvent(ctx, ctx.InvocationID())
-			ev.Author = "coordinator"
 			ev.Routes = []string{route}
 			ev.Output = input // pass the user's text to the chosen agent
 			return ev, nil

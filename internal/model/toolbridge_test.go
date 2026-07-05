@@ -36,9 +36,20 @@ func TestParseToolCall(t *testing.T) {
 		t.Errorf("Args[query] = %v, want 'go news'", fc.Args["query"])
 	}
 
+	// Gemma commonly fences tool calls as ```tool_code (not ```json).
+	fc, ok = parseToolCall("```tool_code\n{\"tool\": \"web_search\", \"args\": {\"query\": \"go\"}}\n```", allowed)
+	if !ok || fc.Name != "web_search" {
+		t.Errorf("```tool_code fenced call should parse, got ok=%v fc=%v", ok, fc)
+	}
+
 	// Plain-text answer: not a tool call.
 	if _, ok := parseToolCall("The latest Go release is great.", allowed); ok {
 		t.Error("plain text must not parse as a tool call")
+	}
+
+	// Prose that merely mentions JSON must not trigger a call.
+	if _, ok := parseToolCall(`I could call {"tool":"web_search"} but I won't.`, allowed); ok {
+		t.Error("mid-prose JSON must not parse as a tool call")
 	}
 
 	// A tool name that is not allowed must be rejected (least privilege).
@@ -51,6 +62,12 @@ func TestParseToolCall(t *testing.T) {
 	if !ok || fc.Args == nil {
 		t.Error("missing args should default to empty map")
 	}
+
+	// Key-variant tolerance: small models emit tool_name/parameters etc.
+	fc, ok = parseToolCall(`{"tool_name":"web_search","parameters":{"query":"go"}}`, allowed)
+	if !ok || fc.Name != "web_search" || fc.Args["query"] != "go" {
+		t.Errorf("tool_name/parameters variant should parse, got ok=%v fc=%+v", ok, fc)
+	}
 }
 
 func TestBuildToolInstructionEmpty(t *testing.T) {
@@ -59,19 +76,32 @@ func TestBuildToolInstructionEmpty(t *testing.T) {
 	}
 }
 
-func TestHasFunctionResponse(t *testing.T) {
-	none := []*genai.Content{
-		{Parts: []*genai.Part{{Text: "hi"}}},
-		{Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "web_search"}}}},
+func TestToolRanThisTurn(t *testing.T) {
+	userText := func(s string) *genai.Content {
+		return &genai.Content{Role: "user", Parts: []*genai.Part{{Text: s}}}
 	}
-	if hasFunctionResponse(none) {
-		t.Error("no FunctionResponse present, want false")
+	modelCall := &genai.Content{Role: "model", Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "web_search"}}}}
+	toolResult := &genai.Content{Role: "user", Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{Name: "web_search"}}}}
+
+	// First model call of a turn: just the user's text → offer tools.
+	if toolRanThisTurn([]*genai.Content{userText("find go news")}) {
+		t.Error("fresh user turn: no tool has run, want false")
 	}
 
-	withResp := append(none, &genai.Content{
-		Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{Name: "web_search"}}},
-	})
-	if !hasFunctionResponse(withResp) {
-		t.Error("FunctionResponse present, want true (one-shot tool gate)")
+	// Same turn, after the tool ran → suppress tools (force final answer).
+	if !toolRanThisTurn([]*genai.Content{userText("find go news"), modelCall, toolResult}) {
+		t.Error("tool result present this turn, want true")
+	}
+
+	// Regression (reviewer's blocking issue): a NEW user turn after a prior
+	// turn that used a tool must offer tools again — the gate is per turn, not
+	// per session.
+	newTurn := []*genai.Content{
+		userText("find go news"), modelCall, toolResult,
+		&genai.Content{Role: "model", Parts: []*genai.Part{{Text: "here is the news"}}},
+		userText("now search for rust news"),
+	}
+	if toolRanThisTurn(newTurn) {
+		t.Error("new user turn after a prior tool use: must offer tools again (per-turn gate)")
 	}
 }
