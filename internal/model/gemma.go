@@ -98,6 +98,26 @@ func (g *Gemma) GenerateContent(ctx context.Context, req *adkmodel.LLMRequest, _
 	return func(yield func(*adkmodel.LLMResponse, error) bool) {
 		messages := toOllamaMessages(req)
 
+		// Tool bridge: if the request offers tools, describe them in the
+		// prompt and remember which names are callable so we can parse the
+		// reply back into a FunctionCall (local Gemma has no native tools).
+		//
+		// One-shot: only offer tools when no tool has run yet this turn. Once a
+		// FunctionResponse is in the history, suppress tool-offering so the
+		// model must produce a final text answer. This bounds a weak local
+		// model to a single tool round-trip instead of looping on the tool.
+		var allowed map[string]bool
+		if !hasFunctionResponse(req.Contents) {
+			decls := declarations(req.Config)
+			if len(decls) > 0 {
+				allowed = make(map[string]bool, len(decls))
+				for _, d := range decls {
+					allowed[d.Name] = true
+				}
+				messages = append(messages, ollamaMessage{Role: "system", Content: buildToolInstruction(decls)})
+			}
+		}
+
 		body, err := json.Marshal(ollamaChatRequest{
 			Model:    g.model,
 			Messages: messages,
@@ -138,18 +158,38 @@ func (g *Gemma) GenerateContent(ctx context.Context, req *adkmodel.LLMRequest, _
 			return
 		}
 
+		usage := &genai.GenerateContentResponseUsageMetadata{
+			PromptTokenCount:     out.PromptEvalCount,
+			CandidatesTokenCount: out.EvalCount,
+			TotalTokenCount:      out.PromptEvalCount + out.EvalCount,
+		}
+
+		// If tools were offered and the reply is a JSON tool call, hand ADK a
+		// FunctionCall part so its normal tool-execution (+ HITL + telemetry)
+		// path runs. Otherwise return the reply as plain text.
+		if len(allowed) > 0 {
+			if fc, ok := parseToolCall(out.Message.Content, allowed); ok {
+				yield(&adkmodel.LLMResponse{
+					Content: &genai.Content{
+						Role:  "model",
+						Parts: []*genai.Part{{FunctionCall: fc}},
+					},
+					ModelVersion:  out.Model,
+					TurnComplete:  true,
+					UsageMetadata: usage,
+				}, nil)
+				return
+			}
+		}
+
 		yield(&adkmodel.LLMResponse{
 			Content: &genai.Content{
 				Role:  "model",
 				Parts: []*genai.Part{{Text: out.Message.Content}},
 			},
-			ModelVersion: out.Model,
-			TurnComplete: true,
-			UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
-				PromptTokenCount:     out.PromptEvalCount,
-				CandidatesTokenCount: out.EvalCount,
-				TotalTokenCount:      out.PromptEvalCount + out.EvalCount,
-			},
+			ModelVersion:  out.Model,
+			TurnComplete:  true,
+			UsageMetadata: usage,
 		}, nil)
 	}
 }
@@ -171,13 +211,34 @@ func toOllamaMessages(req *adkmodel.LLMRequest) []ollamaMessage {
 		if c == nil {
 			continue
 		}
-		text := partsText(c.Parts)
+		text := renderContent(c)
 		if text == "" {
 			continue
 		}
 		messages = append(messages, ollamaMessage{Role: ollamaRole(c.Role), Content: text})
 	}
 	return messages
+}
+
+// renderContent flattens a content's parts into a single prompt string,
+// including tool-bridge parts: an assistant FunctionCall and a tool's
+// FunctionResponse are rendered as text so a non-function-calling local model
+// keeps multi-turn continuity across a tool round-trip.
+func renderContent(c *genai.Content) string {
+	var lines []string
+	for _, p := range c.Parts {
+		switch {
+		case p == nil:
+			continue
+		case p.Text != "":
+			lines = append(lines, p.Text)
+		case p.FunctionCall != nil:
+			lines = append(lines, renderFunctionCall(p.FunctionCall))
+		case p.FunctionResponse != nil:
+			lines = append(lines, renderFunctionResponse(p.FunctionResponse))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func partsText(parts []*genai.Part) string {
