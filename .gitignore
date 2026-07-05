@@ -1,6 +1,7 @@
-# Compiled binaries
-gopherguard
-gopherguard-vuln
+# Compiled binaries (anchored to repo root so they do NOT match the
+# cmd/gopherguard and cmd/gopherguard-vuln source directories)
+/gopherguard
+/gopherguard-vuln
 *.exe
 *.exe~
 *.dll

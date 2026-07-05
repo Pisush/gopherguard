@@ -10,8 +10,8 @@ gopherguard is a production-grade, security-instrumented multi-agent system buil
 
 Milestones, tracked M0 → M5:
 
-- [x] **M0** — Scaffold (module, docs, CI skeleton, dev environment) — *in progress*
-- [ ] **M1** — Hardened baseline agent (Coordinator/Researcher/DB/Writer on Gemma-local)
+- [x] **M0** — Scaffold (module, docs, dev environment, Gemma-local one-tool agent)
+- [x] **M1** — Hardened baseline: code-routed Coordinator/Researcher/DB/Writer graph, trust-boundary OTel, HITL on mutating tools, least-privilege scoping, Gemma tool-bridge
 - [ ] **M2** — Vulnerable/hardened OWASP Agentic Top 10 pairs
 - [ ] **M3** — Trust-boundary telemetry + trace-query detections
 - [ ] **M4** — Eval-gated CI/CD to Cloud Run
