@@ -16,7 +16,11 @@
 // registry hands the raw tool to the agent.
 package tools
 
-import "google.golang.org/adk/v2/tool"
+import (
+	"fmt"
+
+	"google.golang.org/adk/v2/tool"
+)
 
 // ScopedTool pairs an ADK tool with gopherguard's security metadata without
 // wrapping (and thus without hiding) the tool. The raw Tool is passed to the
@@ -36,7 +40,9 @@ func Scope(t tool.Tool, privilegeScope string, mutating, touchesUntrusted bool) 
 	return ScopedTool{Tool: t, scope: privilegeScope, mutating: mutating, untrusted: touchesUntrusted}
 }
 
-// Name returns the underlying tool's name.
+// Name returns the underlying tool's name. The zero ScopedTool (Tool == nil)
+// is not usable; callers must check the error from the tool constructor before
+// using the value.
 func (s ScopedTool) Name() string { return s.Tool.Name() }
 
 // PrivilegeScope reports the capability the tool exercises, e.g. "read:web",
@@ -62,9 +68,24 @@ type Registry struct {
 // NewRegistry creates an empty tool registry.
 func NewRegistry() *Registry { return &Registry{} }
 
-// Register adds scoped tools to the registry.
-func (r *Registry) Register(ts ...ScopedTool) {
-	r.tools = append(r.tools, ts...)
+// Register adds scoped tools to the registry. It rejects a nil underlying tool
+// and duplicate tool names: the telemetry and policy layers correlate scope
+// metadata to tools by name, so a duplicate name would make privilege
+// attribution ambiguous.
+func (r *Registry) Register(ts ...ScopedTool) error {
+	for _, t := range ts {
+		if t.Tool == nil {
+			return fmt.Errorf("register: tool has nil underlying tool.Tool (check the constructor error)")
+		}
+		name := t.Name()
+		for _, existing := range r.tools {
+			if existing.Name() == name {
+				return fmt.Errorf("register: tool %q already registered", name)
+			}
+		}
+		r.tools = append(r.tools, t)
+	}
+	return nil
 }
 
 // Tools returns the underlying ADK tools for agent wiring. These are the raw,

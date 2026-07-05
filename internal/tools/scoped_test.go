@@ -15,7 +15,9 @@ func TestRegistryReturnsRawTool(t *testing.T) {
 	}
 
 	r := NewRegistry()
-	r.Register(clock)
+	if err := r.Register(clock); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
 
 	got := r.Tools()
 	if len(got) != 1 {
@@ -46,9 +48,36 @@ func TestWorldClockScope(t *testing.T) {
 }
 
 func TestScopeMetadata(t *testing.T) {
-	clock, _ := NewWorldClock()
+	clock, err := NewWorldClock()
+	if err != nil {
+		t.Fatalf("NewWorldClock: %v", err)
+	}
 	s := Scope(clock.Tool, "write:db", true, true)
 	if s.PrivilegeScope() != "write:db" || !s.IsMutating() || !s.TouchesUntrusted() {
 		t.Errorf("Scope metadata not carried through: %+v", s)
+	}
+}
+
+func TestRegisterRejectsDuplicateName(t *testing.T) {
+	clock, err := NewWorldClock()
+	if err != nil {
+		t.Fatalf("NewWorldClock: %v", err)
+	}
+	r := NewRegistry()
+	if err := r.Register(clock); err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+	if err := r.Register(clock); err == nil {
+		t.Error("Register accepted a duplicate tool name; want error (breaks name-keyed privilege attribution)")
+	}
+	if len(r.Tools()) != 1 {
+		t.Errorf("registry has %d tools after duplicate, want 1", len(r.Tools()))
+	}
+}
+
+func TestRegisterRejectsNilTool(t *testing.T) {
+	r := NewRegistry()
+	if err := r.Register(ScopedTool{}); err == nil {
+		t.Error("Register accepted a zero ScopedTool (nil underlying tool); want error")
 	}
 }

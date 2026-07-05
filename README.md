@@ -28,6 +28,7 @@ Then:
 
 ```sh
 cp .env.example .env
+make hooks   # install the pre-commit secret scan (once per clone)
 make run
 ```
 

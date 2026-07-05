@@ -33,7 +33,9 @@ func BuildM0(ctx context.Context) (agent.Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build tools: %w", err)
 	}
-	registry.Register(clock)
+	if err := registry.Register(clock); err != nil {
+		return nil, fmt.Errorf("register tools: %w", err)
+	}
 
 	a, err := llmagent.New(llmagent.Config{
 		Name:        "coordinator",

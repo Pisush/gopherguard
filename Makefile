@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: build run run-vuln test eval trace-up deploy tidy fmt vet ollama-setup help
+.PHONY: build run run-vuln test eval trace-up deploy tidy fmt vet ollama-setup hooks help
 
 build: ## Build hardened and vulnerable binaries into ./bin
 	go build -o bin/gopherguard ./cmd/gopherguard
@@ -40,6 +40,10 @@ ollama-setup: ## Onboarding: pull and start the local Gemma model via Ollama
 	@echo "Run the following to set up local Gemma inference:"
 	@echo "  ollama pull gemma2:2b"
 	@echo "  ollama serve"
+
+hooks: ## Install the pre-commit secret scan (run once per clone)
+	git config core.hooksPath .githooks
+	@echo "pre-commit secret scan installed (core.hooksPath = .githooks)"
 
 help: ## Show this help
 	@echo "gopherguard make targets:"

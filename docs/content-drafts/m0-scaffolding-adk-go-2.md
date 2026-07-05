@@ -15,7 +15,7 @@ ADK Go 2.0 (GA 2026-06-30) requires **Go 1.25+**. The build box had Go 1.22.1. T
 The better move is Go's own toolchain directive. Pin the language version and a concrete toolchain in `go.mod`:
 
 ```
-go 1.25
+go 1.25.0
 
 toolchain go1.25.11
 ```
