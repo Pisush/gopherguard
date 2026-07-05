@@ -57,9 +57,19 @@ Add a pre-commit secret scan while you're at it. It's twenty lines of bash and i
 
 **Acceptance:** `go build ./...`, `go vet ./...`, and `go test ./...` all green; both binaries build; the vulnerable-mode fence verified to refuse an unacknowledged start.
 
+## Two gotchas the live run caught (that unit tests wouldn't)
+
+Building green is not the same as working. Two things only showed up when an actual agent turn ran against a real local model:
+
+1. **The embedded-interface tool trap.** ADK discovers a tool's capabilities by type-asserting the concrete tool to internal interfaces (`FunctionTool` with `Declaration()`/`Run()`, `RequestProcessor` with `ProcessRequest()`). A "scoped tool" wrapper that embeds the `tool.Tool` *interface* forwards only three methods and hides the rest — so the agent rejects it at runtime with `does not implement RequestProcessor()`, even though everything compiles. The fix is to never wrap: carry security metadata *alongside* the untouched tool and hand ADK the raw tool. (There's a regression test pinning this now.)
+
+2. **Gemma doesn't do native tool-calling — and that's a design input, not a bug.** ADK's tool loop assumes a function-calling-capable model. Ask Ollama to run `gemma2:2b` with a `tools` array and it flatly returns `does not support tools`. So the small local default will *hallucinate* a plausible answer (it confidently told me the time in Tokyo — off by hours, and in one run dated the reply to 2023) rather than call the `world_clock` tool. The mandate is Gemma-local-by-default, so the answer is not "switch models" — it's to build a **prompt-based (ReAct-style) tool bridge** into the Gemma adapter so local models can still drive tools deterministically. That's now an explicit M1 task.
+
+The lesson is old and boring and true: a green `go build` proves your types line up, not that your system works. Drive the real path.
+
 ## What's next (M1)
 
-The full code-routed graph — coordinator, researcher, dbagent, writer — with native OTel carrying the trust-boundary attribute vocabulary (`trust.untrusted_input`, `trust.egress`, `trust.hitl_required`, …), HITL gates on mutating tools, and least-privilege scoping. That's where the telemetry spine gets built — the same spine M3 will later query to *catch* attacks.
+The full code-routed graph — coordinator, researcher, dbagent, writer — with native OTel carrying the trust-boundary attribute vocabulary (`trust.untrusted_input`, `trust.egress`, `trust.hitl_required`, …), HITL gates on mutating tools, and least-privilege scoping. Plus the Gemma tool-bridge from the gotcha above, so local-default agents actually invoke tools. That's where the telemetry spine gets built — the same spine M3 will later query to *catch* attacks.
 
 ---
 

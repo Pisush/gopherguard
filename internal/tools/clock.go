@@ -47,7 +47,7 @@ func NewWorldClock() (ScopedTool, error) {
 		}, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("build world_clock tool: %w", err)
+		return ScopedTool{}, fmt.Errorf("build world_clock tool: %w", err)
 	}
 	return Scope(t, "read:time", false, false), nil
 }
