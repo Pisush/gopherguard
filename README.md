@@ -15,7 +15,7 @@ Milestones, tracked M0 → M5:
 - [x] **M2** — Vulnerable/hardened OWASP Agentic (ASI) pairs (8 pairs, fenced, all actions simulated)
 - [x] **M3** — Trace-query detections: 5 seed rules that fire on the vulnerable pair traces and stay quiet on the hardened ones; Tempo/ClickHouse queries + Grafana dashboards
 - [x] **M4** — Eval-gated CI/CD: keyless eval suites (task-success, trajectory, injection-resistance) over a YAML agent config, wired as a merge gate with a cost-delta PR summary; Cloud Run canary + auto-rollback pipeline concept
-- [ ] **M5** — Polyglot A2A (Python analysis agent)
+- [x] **M5** — Polyglot A2A: the Go coordinator calls a Python ADK analysis sub-agent over the A2A protocol, with ONE OpenTelemetry trace spanning both runtimes via the `agent.hop` attribute (`make a2a-setup && make a2a-serve`, then `make a2a-demo`)
 
 ## Quickstart
 
@@ -51,6 +51,9 @@ vulnerable/              OWASP ASI vulnerable pattern implementations
 hardened/                corresponding hardened mitigations
 detections/              trace-query attack detection rules
 evals/                   eval suite gating CI/CD
+internal/a2aremote       A2A client to the Python analysis sub-agent (M5)
+cmd/gga2a                polyglot A2A demo: Go coordinator → Python, one trace
+a2a-python/              Python ADK analysis sub-agent served over A2A
 deploy/                  Cloud Run deploy pipeline config
 docs/                    architecture, OWASP ASI mapping, and design notes
 ```

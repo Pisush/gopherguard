@@ -1,0 +1,12 @@
+# Python analysis sub-agent (M5 polyglot A2A). Pinned to the versions the
+# cross-language round-trip was verified against. Note: google-adk[a2a]
+# currently pins a2a-sdk 0.3.x (protocol v0.3); the Go client bridges that
+# via a2a-go/v2's a2acompat/a2av0 package.
+google-adk[a2a]==2.3.0
+# google-adk pins a2a-sdk but not its server extra; the JSON-RPC server
+# needs starlette + sse-starlette from [http-server].
+a2a-sdk[http-server]==0.3.26
+uvicorn==0.50.2
+opentelemetry-sdk==1.42.1
+opentelemetry-exporter-otlp-proto-http==1.42.1
+opentelemetry-instrumentation-asgi==0.63b1
