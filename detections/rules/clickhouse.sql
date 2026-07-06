@@ -136,7 +136,10 @@ FROM otel_traces AS t
 INNER JOIN otel_traces AS w
     ON t.TraceId = w.TraceId
    AND w.Timestamp >= t.Timestamp
-   AND w.SpanId != t.SpanId
+   -- NOTE: the taint and the mutating write may be on the SAME span (the Go
+   -- rule fires on a single span carrying both mem.provenance and a write:*
+   -- scope, as in the MEMORY pair's memory.decide span), so we do NOT exclude
+   -- w.SpanId = t.SpanId here.
 WHERE t.SpanAttributes['mem.provenance'] != ''
   AND NOT startsWith(t.SpanAttributes['mem.provenance'], 'user')
   AND startsWith(w.SpanAttributes['trust.privilege_scope'], 'write:')

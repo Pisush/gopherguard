@@ -61,7 +61,7 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true" # local dev only -- do not use anonymous auth in production
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
-      GF_INSTALL_PLUGINS: "" # placeholder -- add plugin IDs here if needed
+      GF_INSTALL_PLUGINS: "grafana-clickhouse-datasource" # required for the provisioned ClickHouse datasource
     ports:
       - "3000:3000" # Grafana UI
     volumes:

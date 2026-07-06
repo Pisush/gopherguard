@@ -17,9 +17,11 @@ This directory contains the production-stack equivalents of that idea:
   - Grafana dashboards for both agent SLOs and fired detections.
 
 The **Go implementations in `internal/detect/rules.go` remain the source of
-truth**: they are unit-tested to fire on the M2 vulnerable pairs (the
-deliberately-insecure agents under `vulnerable/`) and stay quiet on the
-`hardened/` equivalents. The TraceQL/SQL here are meant to reproduce that
+truth**: they are unit-tested (in `internal/detect/detect_test.go`) to fire on
+the M2 vulnerable pairs and stay quiet on the hardened equivalents. The pairs
+live in `internal/owasp/` and are exercised through the fenced launcher
+(`cmd/gopherguard-vuln --detect`), not as standalone binaries. The TraceQL/SQL
+here are meant to reproduce that
 same logic against a real trace store in production/staging, where you don't
 have a Go process sitting in the request path to evaluate rules synchronously
 — you have spans landing in Tempo/ClickHouse after the fact, and you query
@@ -129,8 +131,9 @@ export OTEL_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
-Then run any `vulnerable/*` or `hardened/*` scenario and watch spans land in
-Grafana → Explore (Tempo datasource) or query them directly via ClickHouse
+Then run the OWASP pairs via `make detect` (or `cmd/gopherguard-vuln --detect`)
+and watch spans land in Grafana → Explore (Tempo datasource) or query them
+directly via ClickHouse
 (`detections/rules/clickhouse.sql`).
 
 ## Notes / caveats

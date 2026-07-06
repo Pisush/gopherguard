@@ -190,8 +190,6 @@ func scopeRank(scope string) int {
 	switch {
 	case strings.HasPrefix(scope, "admin"):
 		return 3
-	case strings.HasPrefix(scope, "write:egress"), strings.HasPrefix(scope, "write:order"):
-		return 2
 	case strings.HasPrefix(scope, "write:"):
 		return 2
 	case strings.HasPrefix(scope, "read:"):

@@ -147,11 +147,22 @@ trace, by a mutating decision span running under a `write:*`
 `trust.privilege_scope`.
 
 ```traceql
-// GG-DET-05: untrusted-provenance memory read precedes a write-scoped decision span
-{ span.mem.provenance != "user" && span.mem.provenance != "" } >> { span.trust.privilege_scope =~ "^write:" }
+// GG-DET-05 (single span): a span that BOTH carries untrusted provenance AND
+// runs under a write scope. This is the primary form and matches the MEMORY
+// pair, whose memory.decide span stamps both mem.provenance and write:order.
+{ span.mem.provenance !~ "^user" && span.mem.provenance != "" && span.trust.privilege_scope =~ "^write:" }
 ```
 
-No post-processing needed for the core case — `>>` expresses the ordering.
+```traceql
+// GG-DET-05 (cross span): taint on one span, the mutating decision on a later
+// descendant span. Use OR-ed with the single-span form above to catch both.
+{ span.mem.provenance !~ "^user" && span.mem.provenance != "" } >> { span.trust.privilege_scope =~ "^write:" }
+```
+
+The single-span form is primary because the Go rule (rules.go) fires as soon
+as one span carries untrusted provenance and, at or after it, a write scope
+appears — including the same span. The `>>` (descendant) form alone would MISS
+the MEMORY fixture, where both attributes are on one span.
 Note the Go rule's `isUntrustedProvenance` treats any provenance not
 *prefixed* with `"user"` as untrusted (so `"user:alice"` would still count as
 trusted); if provenance values include qualified user identities, prefer:
