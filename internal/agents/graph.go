@@ -198,6 +198,11 @@ func newCoordinatorNode() *workflow.FunctionNode {
 		}, workflow.NodeConfig{})
 }
 
+// Classify exposes the coordinator's deterministic route decision so the eval
+// harness (evals/) can pin it with golden routing checks. It returns one of
+// "research", "data", or "write" — the labels the graph edges are keyed by.
+func Classify(input string) string { return classify(input) }
+
 // classify is the code-routed decision: deterministic keyword routing, no LLM.
 func classify(input string) string {
 	s := strings.ToLower(input)

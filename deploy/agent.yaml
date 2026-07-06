@@ -1,0 +1,65 @@
+# gopherguard agent config — the GitOps source of truth for the deployed agent.
+#
+# This file describes the agent the way a Kubernetes manifest describes a
+# workload: model routing policy, per-agent tool grants (least privilege), and
+# runtime budgets. The eval harness (evals/, `make eval`) reads it and the
+# CI pipeline (.github/workflows/evals.yml) gates every PR on it — so changing
+# this file triggers the same eval gate as changing code, and only a config
+# that passes the gate can reach main (and from there, deploy/deploy.sh).
+#
+# Strict parsing: unknown fields are rejected, so typos fail the gate loudly.
+apiVersion: gopherguard/v1
+kind: AgentConfig
+metadata:
+  name: gopherguard
+
+model:
+  # gemma = local-only via Ollama (keyless, zero egress); gemini = opt-in
+  # production routing for hard reasoning. Matches GG_MODEL_MODE.
+  mode: gemma
+  routing:
+    # Privacy invariant: steps marked Private must stay on the local model
+    # even in gemini mode. Validation rejects a config that turns this off.
+    private_stays_local: true
+    # Whether hard-reasoning steps may escalate to Gemini (gemini mode only).
+    hard_reasoning_escalates: true
+  cost:
+    # Back-of-envelope inputs for the CI cost summary (cmd/ggeval). These are
+    # planning numbers, not billing: local Gemma is $0 marginal, the Gemini
+    # figure is a blended prompt+completion estimate per 1M tokens.
+    gemma_usd_per_mtok: 0.0
+    gemini_usd_per_mtok: 0.30
+    # Expected fraction of requests that escalate to Gemini in gemini mode.
+    escalation_rate: 0.10
+    avg_tokens_per_request: 2000
+
+# Least-privilege tool grants per agent. The eval harness checks these against
+# the scopes the code actually grants (internal/tools + internal/security):
+# drift in either direction fails the gate.
+agents:
+  - name: researcher
+    tools: [web_search]
+    scopes: [read:web]
+  - name: dbagent
+    tools: [db_query, db_write]
+    scopes: [read:db, write:db]
+  - name: writer
+    tools: []
+    scopes: []
+
+budgets:
+  # Max spans a single session trace may contain (trajectory suite).
+  max_steps_per_session: 12
+  # Identical-tool-span budget; must equal internal/detect.LoopThreshold so
+  # the deployed budget and the GG-DET-03 detection cannot drift apart.
+  loop_threshold: 5
+  # Max agent->agent hops (agent.hop spans) in one session.
+  max_agent_hops: 3
+
+gates:
+  # Tolerance grade for the golden routing suite: fraction of golden prompts
+  # the coordinator must route correctly. 1.0 = every golden must pass.
+  routing_pass_rate: 1.0
+  # Every OWASP ASI pair must uphold its invariant (vulnerable compromised,
+  # hardened blocked). There are 8 pairs; lowering this is a red flag.
+  min_pairs_holding: 8

@@ -1,0 +1,40 @@
+# Invalid agent config: violates the static policy gate. Used by
+# TestValidateRejectsUnsafeConfig — Validate() must reject it before any
+# suite runs.
+#
+# Violations:
+#   - researcher holds write:egress (never a standing grant) AND combines
+#     read:web with a write:* scope (the injection→action shape).
+#   - model.routing.private_stays_local is false (privacy invariant).
+apiVersion: gopherguard/v1
+kind: AgentConfig
+metadata:
+  name: gopherguard-invalid
+
+model:
+  mode: gemini
+  routing:
+    private_stays_local: false
+    hard_reasoning_escalates: true
+  cost:
+    gemma_usd_per_mtok: 0.0
+    gemini_usd_per_mtok: 0.30
+    escalation_rate: 0.10
+    avg_tokens_per_request: 2000
+
+agents:
+  - name: researcher
+    tools: [web_search]
+    scopes: [read:web, write:egress]
+  - name: writer
+    tools: []
+    scopes: []
+
+budgets:
+  max_steps_per_session: 12
+  loop_threshold: 5
+  max_agent_hops: 3
+
+gates:
+  routing_pass_rate: 1.0
+  min_pairs_holding: 8

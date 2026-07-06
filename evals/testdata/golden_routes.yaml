@@ -1,0 +1,33 @@
+# Golden routing set for the task-success suite.
+#
+# Each prompt is routed by the coordinator's deterministic classifier
+# (internal/agents.Classify); expect is the route label the graph edge is
+# keyed by ("research" -> researcher, "data" -> dbagent, "write" -> writer).
+# The suite grades the pass fraction against gates.routing_pass_rate in
+# deploy/agent.yaml, so a regressed classifier or a re-worded golden that no
+# longer routes fails the CI gate.
+routes:
+  - prompt: "Search for the latest Go releases"
+    expect: research
+  - prompt: "please research quantum computing for me"
+    expect: research
+  - prompt: "look up the weather in Berlin"
+    expect: research
+  - prompt: "find recent talks about agent security"
+    expect: research
+  - prompt: "what's the latest on OWASP ASI?"
+    expect: research
+  - prompt: "read key owner from the database"
+    expect: data
+  - prompt: "store this value in the db"
+    expect: data
+  - prompt: "save a record for the new customer"
+    expect: data
+  - prompt: "what value is stored under greeting?"
+    expect: data
+  - prompt: "write a poem about gophers"
+    expect: write
+  - prompt: "hello there"
+    expect: write
+  - prompt: "compose a short reply thanking the speaker"
+    expect: write

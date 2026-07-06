@@ -1,0 +1,108 @@
+# Eval-gated CI: every PR must pass build/vet/test AND the eval suites
+# (task-success, trajectory, injection-resistance) before it can merge.
+#
+# Merge blocking: mark both jobs below as required status checks in branch
+# protection (Settings → Branches → main → require "build / vet / test" and
+# "eval gate"). The jobs failing is what blocks the merge.
+#
+# GitOps: deploy/agent.yaml is part of the gated surface — a PR that only
+# changes the agent config still runs the full gate, and the eval summary
+# comment shows the cost delta vs the base branch's config.
+name: evals
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: auto
+
+jobs:
+  build-test:
+    name: build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+
+  evals:
+    name: eval gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # PR eval-summary comment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # base ref needed for the agent-config cost delta
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run eval suites (the gate)
+        id: gate
+        run: make eval
+
+      - name: Baseline agent config from base branch
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          git show "origin/${{ github.base_ref }}:deploy/agent.yaml" > /tmp/agent-base.yaml \
+            || rm -f /tmp/agent-base.yaml
+
+      - name: Eval + cost summary
+        if: always()
+        run: |
+          COMPARE=""
+          [ -f /tmp/agent-base.yaml ] && COMPARE="-compare /tmp/agent-base.yaml"
+          # ggeval exits 1 on gate failure; the summary must still render.
+          go run ./cmd/ggeval -config deploy/agent.yaml $COMPARE -markdown > /tmp/eval-summary.md || true
+          cat /tmp/eval-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment eval summary on PR
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true # forks get a read-only token; the step summary still has the report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- gopherguard-eval-summary -->';
+            let report;
+            try {
+              report = fs.readFileSync('/tmp/eval-summary.md', 'utf8');
+            } catch (e) {
+              return; // no summary rendered (e.g. config failed to parse)
+            }
+            const body = `${marker}\n${report}`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
