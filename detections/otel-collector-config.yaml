@@ -1,0 +1,65 @@
+# OTel Collector config for the gopherguard trace-store stack.
+#
+# The gopherguard app points its OTLP exporter at this collector:
+#   OTEL_EXPORTER=otlp
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317   (gRPC)
+#   # or http://localhost:4318 for HTTP
+#
+# This collector receives OTLP, batches it, and fans every span out to BOTH
+# Grafana Tempo (for TraceQL) and ClickHouse (for SQL) -- see
+# detections/rules/traceql.md and detections/rules/clickhouse.sql for the
+# detection queries run against each sink.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 8192
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+exporters:
+  # Fan-out sink #1: Grafana Tempo, for TraceQL trace-shaped queries.
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Fan-out sink #2: ClickHouse, for SQL aggregations/joins over spans.
+  # Table/DDL is created by the exporter on first run (ttl/engine below are
+  # exporter defaults; tune for production retention).
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s&compress=lz4
+    database: otel
+    ttl: 72h
+    traces_table_name: otel_traces
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Local debug sink -- useful when validating the pipeline is receiving
+  # anything at all; safe to remove in a real deployment.
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo, clickhouse, debug]
