@@ -12,6 +12,8 @@ cross-language demo reproduces headless on any machine.
 
 ## Setup
 
+Requires Python 3.10+ (`google-adk`'s floor; verified with 3.14).
+
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt

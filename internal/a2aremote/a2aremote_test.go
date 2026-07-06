@@ -165,7 +165,6 @@ func assertHopAndPropagation(t *testing.T, exporter *tracetest.InMemoryExporter,
 	var analyze *tracetest.SpanStub
 	for _, s := range exporter.GetSpans() {
 		if s.Name == "a2a.analyze" {
-			s := s
 			analyze = &s
 			break
 		}

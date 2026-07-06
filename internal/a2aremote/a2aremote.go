@@ -16,6 +16,12 @@
 // the v0.3 wire format via a2acompat/a2av0, because google-adk for Python
 // currently pins a2a-sdk 0.3.x. Which dialect is used is decided by the
 // remote agent card, fetched from /.well-known/agent-card.json.
+//
+// Continuity requires a recording span: callers must have a real (sampling)
+// global tracer provider installed — telemetry.Setup with an OTLP endpoint,
+// or the demo's console fallback. Under a no-op provider the hop span is
+// non-recording and no traceparent goes on the wire, so the Python side
+// starts a fresh trace instead of joining.
 package a2aremote
 
 import (
@@ -67,6 +73,11 @@ func NewAnalysisClient(ctx context.Context, baseURL string) (*AnalysisClient, er
 	}
 
 	client, err := a2aclient.NewFromCard(ctx, card,
+		// Drop the factory's default transports: they run over a plain
+		// http.Client, and an untraced transport silently winning selection
+		// is exactly the cross-language trace break this package exists to
+		// prevent. Every registered transport below propagates trace context.
+		a2aclient.WithDefaultsDisabled(),
 		// v1.0 JSON-RPC (a2a-go/v2 native), over the trace-propagating client.
 		a2aclient.WithJSONRPCTransport(httpClient),
 		// v0.3 JSON-RPC compat, for Python a2a-sdk 0.3.x servers (what
@@ -113,11 +124,17 @@ func (c *AnalysisClient) Analyze(ctx context.Context, text string) (string, erro
 // format when the v1.0 parse yields no usable transport interfaces (a v0.3
 // card carries url/preferredTransport instead of supportedInterfaces).
 func parseCard(body []byte) (*a2a.AgentCard, error) {
-	card, err := agentcard.DefaultCardParser(body)
-	if err == nil && len(card.SupportedInterfaces) > 0 {
+	card, v1Err := agentcard.DefaultCardParser(body)
+	if v1Err == nil && len(card.SupportedInterfaces) > 0 {
 		return card, nil
 	}
-	return a2av0.NewAgentCardParser()(body)
+	card, v0Err := a2av0.NewAgentCardParser()(body)
+	if v0Err != nil {
+		// Surface both attempts: a genuinely malformed card should not be
+		// reported as only a v0.3 failure.
+		return nil, errors.Join(v1Err, fmt.Errorf("v0.3 parse: %w", v0Err))
+	}
+	return card, nil
 }
 
 // replyText extracts the agent's textual reply from an A2A result, which is
