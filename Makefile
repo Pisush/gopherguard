@@ -15,9 +15,9 @@ run-vuln: ## Start fenced vulnerable-mode lab (localhost only)
 test: ## Run the test suite
 	go test ./...
 
-eval: ## Run the eval suite (gates CI/CD)
-	@echo "eval suite: implemented in M4"
-	@exit 0
+eval: ## Run the eval gate: task-success, trajectory, injection-resistance (keyless)
+	go test ./evals/...
+	go run ./cmd/ggeval -config deploy/agent.yaml
 
 trace-up: ## Start the local trace stack (OTel Collector + Tempo + ClickHouse + Grafana)
 	docker compose -f detections/docker-compose.yaml up -d
@@ -28,9 +28,8 @@ trace-down: ## Stop the local trace stack
 detect: ## Run the trace-query detection demo over the OWASP pairs (fenced)
 	go run ./cmd/gopherguard-vuln --i-understand-this-is-insecure --detect
 
-deploy: ## Run the deploy pipeline (hardened only, never vuln mode)
-	@echo "deploy pipeline: implemented in M4"
-	@exit 0
+deploy: ## Show the eval-gated Cloud Run canary pipeline (deploy/deploy.sh --execute to run it)
+	bash deploy/deploy.sh --plan
 
 tidy: ## Tidy go.mod/go.sum
 	go mod tidy

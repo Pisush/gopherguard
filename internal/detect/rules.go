@@ -81,8 +81,10 @@ func EvaluateAll(t Trace) []RuleResult {
 	return out
 }
 
-// loopThreshold is the identical-tool-span count above which GG-DET-03 fires.
-const loopThreshold = 5
+// LoopThreshold is the identical-tool-span count above which GG-DET-03 fires.
+// Exported so the eval harness (evals/) can assert the deploy-time loop budget
+// (deploy/agent.yaml) stays consistent with the detection.
+const LoopThreshold = 5
 
 // detectInjectionExfil fires when a span that processed untrusted input is
 // followed (in the same session) by a span that performs egress — the classic
@@ -124,15 +126,15 @@ func detectHITLBypass(t Trace) Finding {
 }
 
 // detectLoopRunaway fires when the same span name repeats more than
-// loopThreshold times in a session — a loop-budget breach / cost runaway.
+// LoopThreshold times in a session — a loop-budget breach / cost runaway.
 func detectLoopRunaway(t Trace) Finding {
 	counts := make(map[string]int)
 	for _, s := range t.Spans {
 		counts[s.Name]++
-		if counts[s.Name] > loopThreshold {
+		if counts[s.Name] > LoopThreshold {
 			return Finding{
 				Fired:    true,
-				Evidence: fmt.Sprintf("span %q repeated %d times (> %d)", s.Name, counts[s.Name], loopThreshold),
+				Evidence: fmt.Sprintf("span %q repeated %d times (> %d)", s.Name, counts[s.Name], LoopThreshold),
 			}
 		}
 	}

@@ -87,7 +87,7 @@ func TestHITLBypass(t *testing.T) {
 // budget, quiet for a normal number of calls.
 func TestLoopRunaway(t *testing.T) {
 	vuln := Capture(func(ctx context.Context) {
-		for i := 0; i < loopThreshold+2; i++ {
+		for i := 0; i < LoopThreshold+2; i++ {
 			_, span := telemetry.StartSpan(ctx, "tool.web_search")
 			span.End()
 		}

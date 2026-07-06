@@ -14,7 +14,7 @@ Milestones, tracked M0 → M5:
 - [x] **M1** — Hardened baseline: code-routed Coordinator/Researcher/DB/Writer graph, trust-boundary OTel, HITL on mutating tools, least-privilege scoping, Gemma tool-bridge
 - [x] **M2** — Vulnerable/hardened OWASP Agentic (ASI) pairs (8 pairs, fenced, all actions simulated)
 - [x] **M3** — Trace-query detections: 5 seed rules that fire on the vulnerable pair traces and stay quiet on the hardened ones; Tempo/ClickHouse queries + Grafana dashboards
-- [ ] **M4** — Eval-gated CI/CD to Cloud Run
+- [x] **M4** — Eval-gated CI/CD: keyless eval suites (task-success, trajectory, injection-resistance) over a YAML agent config, wired as a merge gate with a cost-delta PR summary; Cloud Run canary + auto-rollback pipeline concept
 - [ ] **M5** — Polyglot A2A (Python analysis agent)
 
 ## Quickstart

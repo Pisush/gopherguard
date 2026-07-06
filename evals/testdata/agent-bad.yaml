@@ -1,0 +1,41 @@
+# Deliberately-bad agent config: structurally valid (passes static
+# validation) but WRONG — the eval gate must fail it. Used by
+# TestGateCatchesBadConfig to prove the gate catches a config regression.
+#
+# What's wrong:
+#   - budgets.loop_threshold drifted from internal/detect.LoopThreshold (5),
+#     so the deployed budget and GG-DET-03 would disagree (trajectory fails).
+#   - the researcher agent was dropped, so "research" routes have no
+#     configured target (trajectory golden paths fail).
+apiVersion: gopherguard/v1
+kind: AgentConfig
+metadata:
+  name: gopherguard-bad
+
+model:
+  mode: gemma
+  routing:
+    private_stays_local: true
+    hard_reasoning_escalates: true
+  cost:
+    gemma_usd_per_mtok: 0.0
+    gemini_usd_per_mtok: 0.30
+    escalation_rate: 0.10
+    avg_tokens_per_request: 2000
+
+agents:
+  - name: dbagent
+    tools: [db_query, db_write]
+    scopes: [read:db, write:db]
+  - name: writer
+    tools: []
+    scopes: []
+
+budgets:
+  max_steps_per_session: 12
+  loop_threshold: 50
+  max_agent_hops: 3
+
+gates:
+  routing_pass_rate: 1.0
+  min_pairs_holding: 8
